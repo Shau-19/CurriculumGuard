@@ -166,7 +166,9 @@ safety guarantees under distribution drift.
 ### 📥 Dataset Handling
 
 Fraud_Demo(ANN): Credit Card Fraud Detection Dataset(https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
+
 AGNews(NLP): AG News Classification Dataset(https://www.kaggle.com/datasets/amananandrai/ag-news-classification-dataset/data?select=train.csv)
+
 MNIST(Vision ANN): FashionMNIST Dataset from sklearn.datasets(Downloads as you run the script)
 
 
