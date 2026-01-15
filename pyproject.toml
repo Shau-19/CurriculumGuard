@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "curriculumguard"
+version = "0.1.1"
+description = "Training-time adaptive data curriculum for PyTorch with safety guards"
+readme = "README.md"
+authors = [{name="Shaurya Jain"}]
+license = {text="MIT"}
+dependencies = ["torch", "numpy"]
