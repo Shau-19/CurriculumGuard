@@ -24,12 +24,22 @@ CurriculumGuard introduces a missing layer in ML infrastructure:
 
 > **Adaptive Data Curriculum with Stability-First Control**
 
+It works entirely inside your training loop — no restarts, no trial explosion.
+
 ---
 
 ## ⚙ Installation
 
 ```bash
 pip install curriculumguard
+```
+Verify:
+
+```bash
+python - <<EOF
+from curriculum_guard.core.guard import CurriculumGuard
+print(CurriculumGuard)
+EOF
 ```
 
 ---
@@ -81,6 +91,8 @@ for epoch in range(epochs):
 ## 🛡 Safety Model
 
 CurriculumGuard enforces rollback when instability or regression is detected.
+
+
 
 > Policy is advisory. Safety is authoritative.
 
