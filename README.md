@@ -94,7 +94,7 @@ CurriculumGuard enforces rollback when instability or regression is detected.
 | FashionMNIST 35% noise | 84% | **87.5%** |
 | Fraud Recall | slow | **fast high recall** |
 | Continual Drift | fragile | **stable** 
-|
+
 ---
 
 ## 📊 Real-World Performance
