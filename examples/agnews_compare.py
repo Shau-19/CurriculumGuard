@@ -2,24 +2,34 @@ import sys, os, torch, random, csv
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
-
-DATA_PATH = os.path.join(PROJECT_ROOT, "examples", "data", "train.csv")
+import os, torch, random, csv
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
-from curriculum_guard.core.guard import CurriculumGuard
-from curriculum_guard.sampler.adaptive_sampler import AdaptiveSampler
 
+from curriculum_guard import Curriculum
+
+
+# ---------------------------
+# CONFIG
+# ---------------------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, PROJECT_ROOT)
-
 DATA_PATH = os.path.join(PROJECT_ROOT, "examples", "data", "train.csv")
 
-# ----------- FAST TEXT ENCODER -----------
+
+# ---------------------------
+# FAST TEXT ENCODER
+# ---------------------------
 def fast_encode(t, maxlen=200):
-    arr = torch.frombuffer(bytes(t.lower()[:maxlen], "utf-8", "ignore"), dtype=torch.uint8)
+    arr = torch.frombuffer(
+        bytes(t.lower()[:maxlen], "utf-8", "ignore"),
+        dtype=torch.uint8
+    )
     return torch.bincount(arr % 200, minlength=200).float()
 
-# ----------- DATASET -----------
+
+# ---------------------------
+# DATASET
+# ---------------------------
 class AGNewsBinary(Dataset):
     def __init__(self, limit=4000, noise=1200):
         print("Loading AG News CSV...")
@@ -28,7 +38,7 @@ class AGNewsBinary(Dataset):
 
         with open(DATA_PATH, encoding="utf8") as f:
             reader = csv.reader(f)
-            next(reader)  # skip header row
+            next(reader)
 
             for i, row in enumerate(reader):
                 if i >= limit:
@@ -38,60 +48,81 @@ class AGNewsBinary(Dataset):
                 self.x.append(fast_encode(text))
                 self.y.append(label % 2)
 
+        # inject noise
         for _ in range(noise):
             self.x.append(torch.randn(200))
-            self.y.append(random.randint(0,1))
+            self.y.append(random.randint(0, 1))
 
         print("Dataset ready:", len(self.x))
 
-    def __len__(self): return len(self.x)
-    def __getitem__(self, i): return i, self.x[i], self.y[i]
+    def __len__(self):
+        return len(self.x)
 
-# ----------- ACCURACY -----------
+    def __getitem__(self, i):
+        return i, self.x[i], self.y[i]
+
+
+# ---------------------------
+# ACCURACY
+# ---------------------------
 def accuracy(model, ds):
-    c=t=0
+    correct = total = 0
     with torch.no_grad():
         for _, x, y in DataLoader(ds, 128):
-            p = model(x).argmax(1)
-            c += (p == y).sum().item()
-            t += len(y)
-    return c / t
+            pred = model(x).argmax(1)
+            correct += (pred == y).sum().item()
+            total += len(y)
+    return correct / total
 
-# ----------- MAIN -----------
+
+# ---------------------------
+# MAIN
+# ---------------------------
 if __name__ == "__main__":
     torch.set_num_threads(2)
 
     model = nn.Sequential(
-        nn.Linear(200,64),
+        nn.Linear(200, 64),
         nn.ReLU(),
-        nn.Linear(64,2)
+        nn.Linear(64, 2)
     )
 
-    opt  = torch.optim.Adam(model.parameters(), 1e-3)
-    crit = nn.CrossEntropyLoss(reduction="none")
+    optimizer = torch.optim.Adam(model.parameters(), 1e-3)
+    criterion = nn.CrossEntropyLoss(reduction="none")
 
     ds = AGNewsBinary()
-    guard = CurriculumGuard(ds)
+    loader = DataLoader(ds, batch_size=128, shuffle=True)
 
-    print("=== Baseline ===")
-    for e in range(3):
-        for _, x, y in DataLoader(ds, 128, shuffle=True, num_workers=2, persistent_workers=True):
-            loss = crit(model(x), y)
+    # ---------------------------
+    # BASELINE
+    # ---------------------------
+    print("\n=== Baseline ===")
+    for epoch in range(3):
+        for _, x, y in loader:
+            loss = criterion(model(x), y)
             loss.mean().backward()
-            opt.step(); opt.zero_grad()
-        print("epoch", e, "acc:", accuracy(model, ds))
+            optimizer.step()
+            optimizer.zero_grad()
 
+        print(f"epoch {epoch} acc:", accuracy(model, ds))
+
+    # ---------------------------
+    # CURRICULUMGUARD v0.2
+    # ---------------------------
     print("\n=== CurriculumGuard ===")
-    for e in range(8):
-        sampler = AdaptiveSampler(ds, guard.bucketer.bucketize(), guard.weights)
-        for ids, x, y in DataLoader(ds, 128, sampler=sampler, num_workers=2, persistent_workers=True):
-            out  = model(x)
-            loss = crit(out, y)
 
-            # critical: prevent autograd graph leak
-            guard.profiler.update(ids, loss.detach(), out.detach(), y)
+    curriculum = Curriculum.auto(ds)
+
+    for epoch in range(8):
+        for ids, x, y in curriculum(loader):
+            logits = model(x)
+            loss = criterion(logits, y)
+
+            # single curriculum hook
+            curriculum.step(ids, loss, logits, y)
 
             loss.mean().backward()
-            opt.step(); opt.zero_grad()
+            optimizer.step()
+            optimizer.zero_grad()
 
-        print("epoch", e, "acc:", accuracy(model, ds))
+        print(f"epoch {epoch} acc:", accuracy(model, ds))

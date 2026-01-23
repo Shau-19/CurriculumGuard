@@ -6,72 +6,113 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision.datasets import FashionMNIST
 from torchvision.transforms import ToTensor
-from curriculum_guard.core.guard import CurriculumGuard
-from curriculum_guard.sampler.adaptive_sampler import AdaptiveSampler
+
+from curriculum_guard import Curriculum
+
 
 # ----------------------------
-# Noisy FashionMNIST
+# Noisy FashionMNIST Dataset
 # ----------------------------
 class NoisyFashion(Dataset):
     def __init__(self, train=True, noise=0.35):
-        base = FashionMNIST("examples\data", train=train, download=True, transform=ToTensor())
-        self.x = base.data.float().view(len(base),-1)/255
+        base = FashionMNIST(
+            "examples/data",
+            train=train,
+            download=True,
+            transform=ToTensor()
+        )
+
+        self.x = base.data.float().view(len(base), -1) / 255.0
         self.y = base.targets.clone()
 
+        # inject label noise
         if train:
-            for i in random.sample(range(len(self.y)), int(noise*len(self.y))):
-                self.y[i] = random.randint(0,9)
+            for i in random.sample(range(len(self.y)), int(noise * len(self.y))):
+                self.y[i] = random.randint(0, 9)
 
-    def __len__(self): return len(self.x)
-    def __getitem__(self,i): return i,self.x[i],self.y[i]
+    def __len__(self):
+        return len(self.x)
+
+    def __getitem__(self, i):
+        return i, self.x[i], self.y[i]
+
 
 # ----------------------------
 # Accuracy
 # ----------------------------
-def accuracy(model,ds):
-    c=0;t=0
+def accuracy(model, ds):
+    correct = total = 0
     with torch.no_grad():
-        for _,x,y in DataLoader(ds,256):
-            p=model(x).argmax(1)
-            c+=(p==y).sum().item()
-            t+=len(y)
-    return c/t
+        for _, x, y in DataLoader(ds, 256):
+            pred = model(x).argmax(1)
+            correct += (pred == y).sum().item()
+            total += len(y)
+    return correct / total
+
 
 # ----------------------------
 # Model
 # ----------------------------
-model = nn.Sequential(
-    nn.Linear(784,256), nn.ReLU(),
-    nn.Linear(256,128), nn.ReLU(),
-    nn.Linear(128,10)
-)
+def make_model():
+    return nn.Sequential(
+        nn.Linear(784, 256),
+        nn.ReLU(),
+        nn.Linear(256, 128),
+        nn.ReLU(),
+        nn.Linear(128, 10)
+    )
 
-opt = torch.optim.Adam(model.parameters(),1e-3)
-crit = nn.CrossEntropyLoss(reduction="none")
 
-train_ds = NoisyFashion(train=True)
+criterion = nn.CrossEntropyLoss(reduction="none")
+
+
+# ----------------------------
+# Data
+# ----------------------------
+train_ds = NoisyFashion(train=True, noise=0.35)
 val_ds   = NoisyFashion(train=False, noise=0.0)
 
-# ----------------------------
-# Baseline
-# ----------------------------
+train_loader = DataLoader(train_ds, batch_size=128, shuffle=True)
+
+
+# ============================
+# 1️⃣ Baseline Training
+# ============================
 print("=== Baseline Vision ===")
-for e in range(3):
-    for _,x,y in DataLoader(train_ds,128,shuffle=True):
-        loss = crit(model(x),y)
-        loss.mean().backward();opt.step();opt.zero_grad()
-    print("epoch",e,"val acc:",accuracy(model,val_ds))
 
-# ----------------------------
-# CurriculumGuard
-# ----------------------------
+model = make_model()
+optimizer = torch.optim.Adam(model.parameters(), 1e-3)
+
+for epoch in range(3):
+    for _, x, y in train_loader:
+        loss = criterion(model(x), y)
+        loss.mean().backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+    print(f"epoch {epoch} | val acc: {accuracy(model, val_ds):.4f}")
+
+
+# ============================
+# 2️⃣ CurriculumGuard v0.2
+# ============================
 print("\n=== CurriculumGuard Vision ===")
-guard = CurriculumGuard(train_ds)
 
-for e in range(8):
-    sampler = AdaptiveSampler(train_ds,guard.bucketer.bucketize(),guard.weights)
-    for ids,x,y in DataLoader(train_ds,128,sampler=sampler):
-        out=model(x);loss=crit(out,y)
-        guard.profiler.update(ids,loss,out,y)
-        loss.mean().backward();opt.step();opt.zero_grad()
-    print("epoch",e,"val acc:",accuracy(model,val_ds))
+model = make_model()
+optimizer = torch.optim.Adam(model.parameters(), 1e-3)
+
+curriculum = Curriculum.auto(train_ds)
+
+for epoch in range(8):
+    for ids, x, y in curriculum(train_loader):
+        logits = model(x)
+        loss = criterion(logits, y)
+
+        # single curriculum hook
+        curriculum.step(ids, loss, logits, y)
+
+        loss.mean().backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+    print(f"epoch {epoch} | val acc: {accuracy(model, val_ds):.4f}")
