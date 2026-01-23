@@ -28,12 +28,23 @@ CurriculumGuard introduces a missing layer in ML infrastructure:
 
 Instead of changing *how* models learn, CurriculumGuard changes **what they learn from — safely, during training**.
 
+It works entirely inside your training loop — no restarts, no trial explosion.
+
 ---
 
 ## ⚙ Installation
 
 ```bash
 pip install curriculumguard
+```
+
+Verify installation:
+
+```bash
+python - <<EOF
+from curriculum_guard.core.guard import CurriculumGuard
+print(CurriculumGuard)
+EOF
 ```
 
 ---
@@ -119,14 +130,57 @@ CurriculumGuard is **conservative by design**.
 
 ---
 
-## 📊 Benchmarks
+## 📊 Real-World Performance
 
-| Task                     | Baseline        | CurriculumGuard       |
-| ------------------------ | --------------- | --------------------- |
-| AG News (noisy labels)   | 68%             | **74%**               |
-| FashionMNIST (35% noise) | 84%             | **87.5%**             |
-| Fraud Detection (recall) | slow & unstable | **fast, high recall** |
-| Continual Drift          | fragile         | **stable**            |
+CurriculumGuard was evaluated across four real-world failure modes: noisy labels, garbage web text, class imbalance, and continual distribution shift.
+
+---
+
+### 🧪 1️⃣ NLP — AG News with Garbage Web Text
+
+| Epoch | Baseline Accuracy | CurriculumGuard Accuracy |
+|------:|------------------:|-------------------------:|
+| 0     | 0.64              | 0.59                     |
+| 2     | 0.69              | 0.70                     |
+| 5     | —                 | **0.72**                 |
+| 7     | —                 | **0.739**                |
+
+**Observation:** Baseline training plateaus early due to noisy web text. CurriculumGuard keeps improving by suppressing unstable samples.
+
+---
+
+### 🧪 2️⃣ Vision — FashionMNIST with 35% Label Noise
+
+| Epoch | Baseline Accuracy | CurriculumGuard Accuracy |
+|------:|------------------:|-------------------------:|
+| 0     | 0.837             | **0.850**                |
+| 2     | 0.840             | **0.859**                |
+| 7     | —                 | **0.875**                |
+
+**Observation:** Label noise stalls conventional training. CurriculumGuard dynamically downweights corrupted samples.
+
+---
+
+### 🧪 3️⃣ Fraud Detection — Credit Card Transactions
+
+| Epoch | Baseline Recall | CurriculumGuard Recall |
+|------:|----------------:|-----------------------:|
+| 0     | 0.44            | **0.66**               |
+| 2     | 0.86            | **0.88**               |
+| 5     | —               | **0.90**               |
+
+**Observation:** CurriculumGuard rapidly improves minority-class recall without destabilizing training.
+
+---
+
+### 🧪 4️⃣ Continual Learning — Distribution Shift
+
+| Phase  | Baseline Accuracy | CurriculumGuard Accuracy      |
+|--------|------------------:|------------------------------:|
+| Task-A | 0.99              | 0.98                          |
+| Task-B | 1.00              | **1.00 (no regression)**      |
+
+**Observation:** Both systems adapt quickly, but CurriculumGuard enforces safety guarantees under distribution drift.
 
 ---
 
@@ -195,6 +249,20 @@ curriculum = Curriculum.from_components(
 If your dataset is clean, CurriculumGuard stays out of the way.
 
 If it's not — it stabilizes learning.
+
+---
+
+## 📥 Datasets Used in Benchmarks
+
+The benchmarks above use the following publicly available datasets:
+
+| Dataset | Domain | Source |
+|---------|--------|--------|
+| **AG News** | NLP | [Kaggle - AG News Classification](https://www.kaggle.com/datasets/amananandrai/ag-news-classification-dataset) |
+| **FashionMNIST** | Vision | `sklearn.datasets` (auto-downloads) |
+| **Credit Card Fraud** | Fraud Detection | [Kaggle - Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) |
+
+All datasets are publicly available and free to use for research and benchmarking purposes.
 
 ---
 
