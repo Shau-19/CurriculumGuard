@@ -153,6 +153,14 @@ class Curriculum:
         """
         self._engine.step(ids, loss, logits, targets)
 
+    def step_validation(self, val_loss):
+        """
+        Update curriculum with validation loss feedback.
+
+        Must be called once per epoch / validation step.
+        """
+        self._engine.guard.step(val_loss)
+
     def stats(self):
         """
         Return read-only curriculum statistics.

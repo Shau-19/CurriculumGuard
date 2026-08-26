@@ -63,7 +63,7 @@ criterion = nn.CrossEntropyLoss(reduction="none")
 
 
 # ===========================
-# 1️⃣ Baseline Continual Learning
+# 1. Baseline Continual Learning
 # ===========================
 print("=== Baseline Continual Learning ===")
 
@@ -90,7 +90,7 @@ for e in range(6):
 
 
 # ===========================
-# 2️⃣ CurriculumGuard v0.2
+# 2. CurriculumGuard v0.2
 # ===========================
 print("\n=== CurriculumGuard Continual Learning ===")
 

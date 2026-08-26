@@ -21,4 +21,6 @@ class SafetyController:
         self.safe_state = state
 
     def rollback(self):
+        self.bad = 0
+        self.hist.clear()
         return self.safe_state

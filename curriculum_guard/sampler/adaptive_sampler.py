@@ -1,25 +1,38 @@
 import random
 from torch.utils.data import Sampler
 class AdaptiveSampler(Sampler):
-    def __init__(self, dataset, buckets, weights):
+    def __init__(self, dataset, guard):
         self.dataset = dataset
-        self.buckets = buckets
-        self.weights = weights
+        self.guard = guard
+
+    def __len__(self):
+        return len(self.dataset)
 
     def __iter__(self):
+        buckets = self.guard.buckets
+        weights = self.guard.weights
 
         # 🔥 WARMUP FALLBACK
-        if not self.buckets or sum(len(v) for v in self.buckets.values()) < len(self.dataset)//5:
+        if not buckets or sum(len(v) for v in buckets.values()) < len(self.dataset)//5:
             return iter(range(len(self.dataset)))
 
-        names = list(self.buckets.keys())
-        probs = [self.weights[n] for n in names]
+        # Filter out empty buckets to ensure we always sample valid indices
+        active_buckets = {k: v for k, v in buckets.items() if len(v) > 0}
+        if not active_buckets:
+            return iter(range(len(self.dataset)))
 
-        chosen = random.choices(names, probs, k=len(self.dataset))
+        names = list(active_buckets.keys())
+        probs = [weights[n] for n in names]
+
+        # Fallback to uniform probabilities if total weight is 0
+        total_prob = sum(probs)
+        if total_prob == 0:
+            probs = [1.0 / len(names)] * len(names)
+
+        chosen = random.choices(names, weights=probs, k=len(self.dataset))
 
         idxs = []
         for b in chosen:
-            if self.buckets[b]:
-                idxs.append(random.choice(self.buckets[b]))
+            idxs.append(random.choice(active_buckets[b]))
 
         return iter(idxs)

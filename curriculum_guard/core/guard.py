@@ -74,6 +74,7 @@ class CurriculumGuard:
         }
         self.buckets = {}
         self.prev = None
+        self.prev_val_loss = None
     
     @classmethod
     def from_components(cls, dataset, profiler, policy, bucketer, safety):
@@ -99,6 +100,7 @@ class CurriculumGuard:
         }
         guard.buckets = {}
         guard.prev = None
+        guard.prev_val_loss = None
         return guard
     
     def snapshot(self):
@@ -106,9 +108,17 @@ class CurriculumGuard:
         return CurriculumState(self.buckets, self.weights.copy())
     
     def step(self, val_loss):
-        
+        # Calculate validation delta
+        if self.prev_val_loss is not None:
+            val_delta = val_loss - self.prev_val_loss
+        else:
+            val_delta = 0.0
+        self.prev_val_loss = val_loss
+
         if self.safety is None:
-            # No safety controller, just update weights
+            # No safety controller, just update weights using policy
+            fb = {"val_delta": val_delta}
+            self.weights = self.policy.propose(self.weights, fb)
             return
         
         if self.safety.record(val_loss):
@@ -120,3 +130,6 @@ class CurriculumGuard:
         else:
             # Mark current state as safe
             self.safety.mark_safe(self.snapshot())
+            # Update weights using policy since it's safe!
+            fb = {"val_delta": val_delta}
+            self.weights = self.policy.propose(self.weights, fb)

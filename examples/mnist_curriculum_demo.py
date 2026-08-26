@@ -76,7 +76,7 @@ train_loader = DataLoader(train_ds, batch_size=128, shuffle=True)
 
 
 # ============================
-# 1️⃣ Baseline Training
+# 1. Baseline Training
 # ============================
 print("=== Baseline Vision ===")
 
@@ -94,7 +94,7 @@ for epoch in range(3):
 
 
 # ============================
-# 2️⃣ CurriculumGuard v0.2
+# 2. CurriculumGuard v0.2
 # ============================
 print("\n=== CurriculumGuard Vision ===")
 

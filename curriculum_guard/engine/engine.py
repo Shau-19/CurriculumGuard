@@ -58,13 +58,9 @@ class CurriculumEngine:
             self._epoch_count += 1
             return dataloader
         
-        buckets = self.guard.buckets
-        weights = self.guard.weights
-
         sampler = AdaptiveSampler(
             dataset=self.dataset,
-            buckets=buckets,
-            weights=weights,
+            guard=self.guard,
         )
         
         self._epoch_count += 1
